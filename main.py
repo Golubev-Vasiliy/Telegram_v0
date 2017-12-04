@@ -1,12 +1,12 @@
 import const
+import additional
 import logging
 import random
-import glob
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
 import eyed3
-import mysql.connector
 import os
 import shutil
+from telegram import ReplyKeyboardMarkup
 from re import search
 
 
@@ -15,29 +15,82 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 
 def start(bot, update):
     bot.send_message(chat_id=update.message.chat_id, text="I'm a fucking bot, please talk to me!\n"
-                                                          "I know only one command because I am very stupid!\n"
-                                                          "    /music")
+                                                          "I very like Russian rap.\n"
+                                                          "    /find - Send me this command and look on the result\n"
+                                                          "    /music - Beautiful track's for my friends\n"
+                                                          "    /help - I can help you")
 
 
 def echo(bot, update):
-    bot.send_message(chat_id=update.message.chat_id, text="Sorry man, you must use special commands for conversation "
-                                                          "with me!\n Write /help for receive a help.")
-
+    button = []
+    error = "You sent me a shit"
+    output = "you don't write new output"
+    print(update.message.text)
+    search_author = search('[\w\s&\(\)\.]*', update.message.text)
+    if search_author:
+        author = search_author.group(0)
+        print(author)
+        search_album = search('(?<=\\\)[\w\s]*(?=\\\?)', update.message.text)
+        if search_album:
+            album = search_album.group(0)
+            print(album)
+            search_song = search('(?<=\\\)[\w\s\.\(\)-]*\.mp3$', update.message.text)
+            if search_song:
+                song = search_song.group(0)
+                print(song)
+                path = "music\\" + author + "\\" + album + "\\" + song
+                bot.send_message(chat_id=update.message.chat_id, text="Wait please")
+                bot.send_audio(chat_id=update.message.chat_id, audio=open(path, 'rb'), duration=5, timeout=60)
+            else:
+                path = "music\\" + author + "\\" + album
+                try:
+                    songs_list = os.listdir(path)
+                    output = "Choose Song:"
+                    for song in songs_list:
+                        list = author + "\\" + album + "\\" + song
+                        button.append([list])
+                    keyboard = ReplyKeyboardMarkup(button, one_time_keyboard=True)
+                except FileNotFoundError:
+                    bot.send_message(chat_id=update.message.chat_id, text=error)
+        else:
+            path = "music\\" + author
+            try:
+                album_list = os.listdir(path)
+                output = "Choose album:"
+                for album in album_list:
+                    list = author + "\\" + album
+                    button.append([list])
+                keyboard = ReplyKeyboardMarkup(button, one_time_keyboard=True)
+            except FileNotFoundError:
+                bot.send_message(chat_id=update.message.chat_id, text=error)
+    else:
+        output = "What you send me?"
+    try:
+        bot.send_message(chat_id=update.message.chat_id, text=output, reply_markup=keyboard)
+    except:
+        pass
 
 def help(bot, update):
     bot.send_message(chat_id=update.message.chat_id, text="You can use next commands:\n"
-                                                          "    /music")
-
-
-def caps(bot, update, args):
-    text_caps = ' '.join(args).upper()
-    bot.send_message(chat_id=update.message.chat_id, text=text_caps)
+                                                          "I like listen new music and if you send me music, that "
+                                                          "I don't know, I add this song in my music library\n"
+                                                          "    /find - I show you a new keyboard and you can choose "
+                                                          "something in the interactive mode\n"
+                                                          "    /music - If you sent me only command, then I send you one"
+                                                          " of most popular Russian track. If you sent me command and "
+                                                          "path, then I send you track on the this path\n"
+                                                          "path has format: author\\album\song.mp3\n"
+                                                          "    /help - I can help you")
 
 
 def music(bot, update, args):
     if args:
+        path = ""
+        for part in args:
+            path += part + " "
         try:
-            filename_music = "music\\" + "".join(args)
+            filename_music = "music\\" + path
+            print(filename_music)
             bot.send_audio(chat_id=update.message.chat_id, audio=open(filename_music, 'rb'), duration=20, timeout=60)
             bot.send_message(chat_id=update.message.chat_id, text="".join(args))
         except FileNotFoundError:
@@ -49,20 +102,6 @@ def music(bot, update, args):
         bot.send_message(chat_id=update.message.chat_id, text="Music for Russian guys\n Wait please!")
         bot.sendAudio(chat_id=update.message.chat_id, audio=open(filename_music, 'rb'), duration=20, timeout=60)
         bot.send_photo(chat_id=update.message.chat_id, photo=open(filename_photo, 'rb'))
-
-
-def music_list(bot, update):
-    glob_list = glob.glob('music\\*.mp3')
-    mus = ""
-    for songs in glob_list:
-        mus += songs.split("\\", 1)[1] + "\n"
-    bot.send_message(chat_id=update.message.chat_id, text=mus)
-
-
-def photo(bot, update):
-    filename = "2.jpg"
-    bot.send_message(chat_id=update.message.chat_id, text=filename)
-    bot.send_photo(chat_id=update.message.chat_id, photo=open(filename, 'rb'))
 
 
 def unknown(bot, update):
@@ -77,7 +116,6 @@ def analyze_mp3(bot, update, args):
            music_info.tag.artist
     author_dir = os.listdir("music\\")
     found_author = False
-    way = ""
     print(author_dir)
     for author in author_dir:
         if author == music_info.tag.artist:
@@ -96,15 +134,18 @@ def analyze_mp3(bot, update, args):
             found_song = False
             print(songs_list)
             for song in songs_list:
-                path = "music\\" + music_info.tag.artist + "\\" + music_info.tag.album + "\\" + song
-                new_song = eyed3.load(path)
-                if music_info.tag.title == new_song.tag.title:
-                    found_song = True
+                try:
+                    path = "music\\" + music_info.tag.artist + "\\" + music_info.tag.album + "\\" + song
+                    new_song = eyed3.load(path)
+                    if music_info.tag.title == new_song.tag.title:
+                        found_song = True
+                except OSError:
+                    print(OSError)
             if found_song:
                 way = "I have this song"
             else:
                 dst_path = "music\\" + music_info.tag.artist + "\\" + music_info.tag.album + "\\" + \
-                           str(music_info.tag.track_num[0]) + ". " + music_info.tag.title + ".mp3"
+                           music_info.tag.title + ".mp3"
                 shutil.copyfile("".join(args), dst_path)
                 way = "I know this author and album, but i don't have this song"
         else:
@@ -112,7 +153,7 @@ def analyze_mp3(bot, update, args):
             path_album = "music\\" + music_info.tag.artist + "\\" + music_info.tag.album
             os.mkdir(path_album)
             dst_path = "music\\" + music_info.tag.artist + "\\" + music_info.tag.album + "\\" + \
-                       str(music_info.tag.track_num[0]) + ". " + music_info.tag.title + ".mp3"
+                       music_info.tag.title + ".mp3"
             shutil.copyfile("".join(args), dst_path)
             way = "I know this author, but i don't have this album and song"
     else:
@@ -127,21 +168,13 @@ def analyze_mp3(bot, update, args):
     bot.send_message(chat_id=update.message.chat_id, text=way)
 
 
-def bd_music(bot, update, args):
-    db = mysql.connector.connect(**const.config)
-    cursor = db.cursor()
-    query = "SHOW TABLES"
-    cursor.execute(query)
-    for tables in cursor.fetchall():
-        print(tables[0])
-    db.close
-
-
 def save_music(bot, update):
     save_file = bot.getFile(file_id=update.message.audio.file_id)
+    title = update.message.audio.title
+    print(title)
     save_file.download()
     print(save_file.file_path)
-    title_base = search('(?<=music/).*\.mp3$', save_file.file_path)
+    title_base = search('(?<=music/).*\.(mp3|m4a)$', save_file.file_path)
     title_on_the_server = title_base.group(0)
     print(title_on_the_server)
     music_info = eyed3.load(title_on_the_server)
@@ -153,46 +186,56 @@ def save_music(bot, update):
     bot.send_message(chat_id=update.message.chat_id, text=info)
 
 
+def find(bot, update):
+    button = []
+    path = "music\\"
+    list_author = os.listdir(path)
+    for author in list_author:
+        button.append([author])
+    keyboard = ReplyKeyboardMarkup(button, one_time_keyboard=True)
+    bot.send_message(chat_id=update.message.chat_id, text="Custom keyboard", reply_markup=keyboard)
+
+
 def main():
     updater = Updater(const.token)
     dispatcher = updater.dispatcher
+
+    # main handler
     start_handler = CommandHandler('start', start)
     help_handler = CommandHandler('help', help)
     echo_handler = MessageHandler(Filters.text, echo)
-    caps_handler = CommandHandler('caps', caps, pass_args=True)
     music_handler = CommandHandler('music', music, pass_args=True)
-    music_list_handler = CommandHandler('musiclist', music_list)
-    photo_handler = CommandHandler('photo', photo)
     analyze_mp3_handler = CommandHandler('analyze', analyze_mp3, pass_args=True)
-    bd_music_handler = CommandHandler('bdmusic', bd_music, pass_args=True)
-    unknown_handler = MessageHandler(Filters.command, unknown)
     save_music_handler = MessageHandler(Filters.audio, save_music)
+    find_handler = CommandHandler('find', find)
+    unknown_handler = MessageHandler(Filters.command, unknown)
 
-    # добавление обработчиков
+    # additional handler
+    photo_handler = CommandHandler('photo', additional.photo)
+    music_list_handler = CommandHandler('musiclisttest', additional.music_list_test, pass_args=True)
+    caps_handler = CommandHandler('caps', additional.caps, pass_args=True)
+    bd_music_handler = CommandHandler('bdmusic', additional.bd_music, pass_args=True)
+
+    # main dispatcher
     dispatcher.add_handler(start_handler)
     dispatcher.add_handler(help_handler)
     dispatcher.add_handler(echo_handler)
-    dispatcher.add_handler(caps_handler)
     dispatcher.add_handler(music_handler)
+    dispatcher.add_handler(analyze_mp3_handler)
+    dispatcher.add_handler(save_music_handler)
+    dispatcher.add_handler(find_handler)
+    dispatcher.add_handler(unknown_handler)
+
+    # additional dispatcher
+    dispatcher.add_handler(bd_music_handler)
     dispatcher.add_handler(music_list_handler)
     dispatcher.add_handler(photo_handler)
-    dispatcher.add_handler(analyze_mp3_handler)
-    dispatcher.add_handler(bd_music_handler)
-    dispatcher.add_handler(unknown_handler)
-    dispatcher.add_handler(save_music_handler)
+    dispatcher.add_handler(caps_handler)
 
-    # запуск работы обработчиков
+    # Start work dispatcher
     updater.start_polling()
     updater.idle()
 
 
 if __name__ == '__main__':
     main()
-
-
-
-
-
-
-
-
