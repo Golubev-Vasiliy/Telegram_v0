@@ -3,7 +3,6 @@ import additional
 import logging
 import random
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
-import eyed3
 import os
 import shutil
 from telegram import ReplyKeyboardMarkup
@@ -27,15 +26,15 @@ def echo(bot, update):
     error = "You sent me a shit"
     output = "you don't write new output"
     print(update.message.text)
-    search_author = search('[\w\s&\(\)\.]*', update.message.text)
+    search_author = search('[\w\s\.\(\)\-,&\(\)\.]*', update.message.text)
     if search_author:
         author = search_author.group(0)
         print(author)
-        search_album = search('(?<=\\\)[\w\s]*(?=\\\?)', update.message.text)
+        search_album = search('(?<=\\\)[\w\s\.\(\)\-,]*(?=\\\?)', update.message.text)
         if search_album:
             album = search_album.group(0)
             print(album)
-            search_song = search('(?<=\\\)[\w\s\.\(\)-]*\.mp3$', update.message.text)
+            search_song = search('(?<=\\\)[\w\s\.\(\)\-,]*\.mp3$', update.message.text)
             if search_song:
                 song = search_song.group(0)
                 print(song)
@@ -77,7 +76,8 @@ def help(bot, update):
                                                           "I don't know, I add this song in my music library\n"
                                                           "    /find - I show you a new keyboard and you can choose "
                                                           "something in the interactive mode\n"
-                                                          "    /music - If you sent me only command, then I send you one"
+                                                          "    /music - If you sent me only command, then "
+                                                          "I send you one"
                                                           " of most popular Russian track. If you sent me command and "
                                                           "path, then I send you track on the this path\n"
                                                           "path has format: author\\album\song.mp3\n"
@@ -113,10 +113,18 @@ def analyze_mp3(bot, update, args):
     music_info = mutagen.File(str(args))
     info = music_info.tags.pprint()
     print(info)
-    rec_author = search('(?<=(ART=|PE1=)).*', info).group(0)
-    rec_album = search('(?<=(alb=|ALB=)).*', info).group(0)
-    rec_song = search('(?<=(nam=|IT2=)).*', info).group(0)
+    rec_author = search('(?<=(ART=|PE1=)).*', info).group(0).replace(":", "")
+    rec_album = search('(?<=(alb=|ALB=)).*', info).group(0).replace(":", "")
+    rec_song = search('(?<=(nam=|IT2=)).*', info).group(0).replace(":", "")
     path = rec_author + "\\" + rec_album + "\\" + rec_song
+    print(path)
+    type_format = search("...$", str(args)).group(0)
+    if type_format == "mp3":
+        dst_path = "music\\" + rec_author + "\\" + rec_album + "\\" + rec_song + ".mp3"
+    else:
+        dst_path = "music\\" + rec_author + "\\" + rec_album + "\\" + rec_song + ".m4a"
+    print(type_format)
+    print(dst_path)
     author_dir = os.listdir("music\\")
     found_author = False
     print(author_dir)
@@ -140,6 +148,7 @@ def analyze_mp3(bot, update, args):
                 try:
                     path = "music\\" + rec_author + "\\" + rec_album + "\\" + song
                     new_song = mutagen.File(path)
+                    info = new_song.pprint()
                     new_song = search('(?<=(nam=|IT2=)).*', info).group(0)
                     if rec_song == new_song:
                         found_song = True
@@ -148,14 +157,12 @@ def analyze_mp3(bot, update, args):
             if found_song:
                 way = "I have this song"
             else:
-                dst_path = "music\\" + rec_author + "\\" + rec_album + "\\" + rec_song + ".mp3"
                 shutil.copyfile("".join(args), dst_path)
                 way = "I know this author and album, but i don't have this song"
         else:
             print("i'm here")
             path_album = "music\\" + rec_author + "\\" + rec_album
             os.mkdir(path_album)
-            dst_path = "music\\" + rec_author + "\\" + rec_album + "\\" + rec_song + ".mp3"
             shutil.copyfile("".join(args), dst_path)
             way = "I know this author, but i don't have this album and song"
     else:
@@ -164,7 +171,6 @@ def analyze_mp3(bot, update, args):
         path_album = "music\\" + rec_author + "\\" + rec_album
         print(path_album)
         os.mkdir(path_album)
-        dst_path = "music\\" + rec_author + "\\" + rec_album + "\\" + rec_song + ".mp3"
         shutil.copyfile("".join(args), dst_path)
         way = "i don't know this author"
     bot.send_message(chat_id=update.message.chat_id, text=way)
@@ -182,15 +188,19 @@ def save_music(bot, update):
     music_info = mutagen.File(title_on_the_server)
     info = music_info.tags.pprint()
     print(info)
-    author = search('(?<=(ART=|PE1=)).*', info).group(0)
-    album = search('(?<=(alb=|ALB=)).*', info).group(0)
-    song = search('(?<=(nam=|IT2=)).*', info).group(0)
-    path = author + "\\" + album + "\\" + song
-    print(path)
-    print(type(info))
-    analyze_mp3(bot, update, title_on_the_server)
-    os.remove(title_on_the_server)
-    bot.send_message(chat_id=update.message.chat_id, text=path)
+    try:
+        author = search('(?<=(ART=|PE1=)).*', info).group(0)
+        album = search('(?<=(alb=|ALB=)).*', info).group(0)
+        song = search('(?<=(nam=|IT2=)).*', info).group(0)
+        path = author + "\\" + album + "\\" + song
+        print(path)
+        print(type(info))
+        analyze_mp3(bot, update, title_on_the_server)
+        os.remove(title_on_the_server)
+        bot.send_message(chat_id=update.message.chat_id, text=path)
+    except AttributeError:
+        bot.send_message(chat_id=update.message.chat_id, text="You send me track without ID3 tags.\n"
+                                                              "I can't receive this track=(")
 
 
 def find(bot, update):
