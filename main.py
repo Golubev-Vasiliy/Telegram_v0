@@ -8,6 +8,7 @@ import os
 import shutil
 from telegram import ReplyKeyboardMarkup
 from re import search
+import mutagen
 
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s - %(funcName)s', level=logging.INFO)
@@ -109,60 +110,61 @@ def unknown(bot, update):
 
 
 def analyze_mp3(bot, update, args):
-    music_info = eyed3.load("".join(args))
-    info = music_info.tag.album + "\n" + \
-           str(music_info.tag.track_num[0]) + "." + \
-           music_info.tag.title + "\n" + \
-           music_info.tag.artist
+    music_info = mutagen.File(str(args))
+    info = music_info.tags.pprint()
+    print(info)
+    rec_author = search('(?<=(ART=|PE1=)).*', info).group(0)
+    rec_album = search('(?<=(alb=|ALB=)).*', info).group(0)
+    rec_song = search('(?<=(nam=|IT2=)).*', info).group(0)
+    path = rec_author + "\\" + rec_album + "\\" + rec_song
     author_dir = os.listdir("music\\")
     found_author = False
     print(author_dir)
     for author in author_dir:
-        if author == music_info.tag.artist:
+        if author == rec_author:
             found_author = True
     if found_author:
-        path = "music\\" + music_info.tag.artist + "\\"
+        path = "music\\" + rec_author + "\\"
         album_dir = os.listdir(path)
         found_album = False
         print(album_dir)
         for album in album_dir:
-            if album == music_info.tag.album:
+            if album == rec_album:
                 found_album = True
         if found_album:
-            path = "music\\" + music_info.tag.artist + "\\" + music_info.tag.album
+            path = "music\\" + rec_author + "\\" + rec_album
             songs_list = os.listdir(path)
             found_song = False
             print(songs_list)
             for song in songs_list:
                 try:
-                    path = "music\\" + music_info.tag.artist + "\\" + music_info.tag.album + "\\" + song
-                    new_song = eyed3.load(path)
-                    if music_info.tag.title == new_song.tag.title:
+                    path = "music\\" + rec_author + "\\" + rec_album + "\\" + song
+                    new_song = mutagen.File(path)
+                    new_song = search('(?<=(nam=|IT2=)).*', info).group(0)
+                    if rec_song == new_song:
                         found_song = True
                 except OSError:
                     print(OSError)
             if found_song:
                 way = "I have this song"
             else:
-                dst_path = "music\\" + music_info.tag.artist + "\\" + music_info.tag.album + "\\" + \
-                           music_info.tag.title + ".mp3"
+                dst_path = "music\\" + rec_author + "\\" + rec_album + "\\" + rec_song + ".mp3"
                 shutil.copyfile("".join(args), dst_path)
                 way = "I know this author and album, but i don't have this song"
         else:
             print("i'm here")
-            path_album = "music\\" + music_info.tag.artist + "\\" + music_info.tag.album
+            path_album = "music\\" + rec_author + "\\" + rec_album
             os.mkdir(path_album)
-            dst_path = "music\\" + music_info.tag.artist + "\\" + music_info.tag.album + "\\" + \
-                       music_info.tag.title + ".mp3"
+            dst_path = "music\\" + rec_author + "\\" + rec_album + "\\" + rec_song + ".mp3"
             shutil.copyfile("".join(args), dst_path)
             way = "I know this author, but i don't have this album and song"
     else:
-        path_author = "music\\" + music_info.tag.artist
+        path_author = "music\\" + rec_author
         os.mkdir(path_author)
-        path_album = "music\\" + music_info.tag.artist + "\\" + music_info.tag.album
+        path_album = "music\\" + rec_author + "\\" + rec_album
+        print(path_album)
         os.mkdir(path_album)
-        dst_path = "music\\" + music_info.tag.artist + "\\" + music_info.tag.album + "\\" + \
-                   str(music_info.tag.track_num[0]) + ". " + music_info.tag.title + ".mp3"
+        dst_path = "music\\" + rec_author + "\\" + rec_album + "\\" + rec_song + ".mp3"
         shutil.copyfile("".join(args), dst_path)
         way = "i don't know this author"
     bot.send_message(chat_id=update.message.chat_id, text=way)
@@ -177,13 +179,18 @@ def save_music(bot, update):
     title_base = search('(?<=music/).*\.(mp3|m4a)$', save_file.file_path)
     title_on_the_server = title_base.group(0)
     print(title_on_the_server)
-    music_info = eyed3.load(title_on_the_server)
-    info = music_info.tag.album + "\n" + \
-           music_info.tag.title + "\n" + \
-           music_info.tag.artist
+    music_info = mutagen.File(title_on_the_server)
+    info = music_info.tags.pprint()
+    print(info)
+    author = search('(?<=(ART=|PE1=)).*', info).group(0)
+    album = search('(?<=(alb=|ALB=)).*', info).group(0)
+    song = search('(?<=(nam=|IT2=)).*', info).group(0)
+    path = author + "\\" + album + "\\" + song
+    print(path)
+    print(type(info))
     analyze_mp3(bot, update, title_on_the_server)
     os.remove(title_on_the_server)
-    bot.send_message(chat_id=update.message.chat_id, text=info)
+    bot.send_message(chat_id=update.message.chat_id, text=path)
 
 
 def find(bot, update):
